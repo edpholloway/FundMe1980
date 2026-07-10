@@ -8,13 +8,18 @@ import LOGO_URI from "./logo.js";
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');`;
 
 const COLORS = {
-  pine: "#1B4332",
-  sage: "#52796F",
-  mint: "#D8F3DC",
-  marigold: "#FFB800",
-  paper: "#FEFDFB",
-  ink: "#2D2A26",
+  pine: "#0E0E0E",      // near-black, matches logo background
+  sage: "#5C7A2E",      // muted olive-green for secondary text
+  mint: "#E8F0DC",      // pale green-tinted panel background
+  marigold: "#7EAB27",  // the logo's signature lime-green
+  paper: "#FFFFFF",     // pure white, matches logo's "FUND" text
+  ink: "#151515",
 };
+
+// Admin accounts: add your own contact info here (whatever you used to
+// sign up) to see and edit platform settings like commission. Everyone
+// else won't see the settings icon or any commission details at all.
+const ADMIN_CONTACTS = ["YOUR_EMAIL_OR_PHONE_HERE"];
 
 function suggestPrice(sqft, weedFeet) {
   const base = 10;
@@ -265,6 +270,7 @@ export default function FundMe1980App() {
   const closedJobs = jobs.filter((j) => j.status !== "open");
   const myJobs = profile ? jobs.filter((j) => j.posterId === profile.id) : [];
   const myBids = profile ? jobs.filter((j) => (j.bids || []).some((b) => b.bidderId === profile.id)) : [];
+  const isAdmin = profile ? ADMIN_CONTACTS.some((c) => c.toLowerCase() === profile.contact.trim().toLowerCase()) : false;
 
   if (profileLoading) return <LoadingScreen />;
   if (!profile) {
@@ -294,9 +300,11 @@ export default function FundMe1980App() {
           <img src={LOGO_URI} alt="FundMe1980 — You bid. We connect. You earn." style={{ height: 40 }} />
           <div className="flex items-center gap-2">
             <span className="text-xs" style={{ color: COLORS.mint }}>Hi, {profile.name.split(" ")[0]}</span>
-            <button onClick={() => setShowSettings(true)} className="p-2 rounded-full" style={{ background: "rgba(255,255,255,0.12)" }}>
-              <SettingsIcon size={16} color={COLORS.paper} />
-            </button>
+            {isAdmin && (
+              <button onClick={() => setShowSettings(true)} className="p-2 rounded-full" style={{ background: "rgba(255,255,255,0.12)" }}>
+                <SettingsIcon size={16} color={COLORS.paper} />
+              </button>
+            )}
           </div>
         </div>
         <nav className="flex gap-1 rounded-full p-1" style={{ background: "rgba(255,255,255,0.12)" }}>
@@ -335,7 +343,7 @@ export default function FundMe1980App() {
               {myJobs.map((job) =>
                 job.status === "open"
                   ? <JobCard key={job.id} job={job} now={now} profile={profile} onBid={null} settings={settings} />
-                  : <ClosedCard key={job.id} job={job} settings={settings} />
+                  : <ClosedCard key={job.id} job={job} settings={settings} profile={profile} />
               )}
             </div>
             <h2 className="font-semibold text-sm mb-2" style={{ color: COLORS.sage }}>JOBS I BID ON</h2>
@@ -344,7 +352,7 @@ export default function FundMe1980App() {
               {myBids.map((job) =>
                 job.status === "open"
                   ? <JobCard key={job.id} job={job} now={now} profile={profile} onBid={() => openBid(job)} settings={settings} />
-                  : <ClosedCard key={job.id} job={job} settings={settings} />
+                  : <ClosedCard key={job.id} job={job} settings={settings} profile={profile} />
               )}
             </div>
           </div>
@@ -355,7 +363,7 @@ export default function FundMe1980App() {
         <BidModal job={jobs.find((j) => j.id === bidJobId)} amount={bidAmount} setAmount={setBidAmount}
           onCancel={() => setBidJobId(null)} onSubmit={submitBid} saving={saving} />
       )}
-      {showSettings && (
+      {showSettings && isAdmin && (
         <SettingsModal settings={settings} onSave={saveSettings} onClose={() => setShowSettings(false)} />
       )}
     </div>
@@ -503,14 +511,15 @@ function JobCard({ job, now, profile, onBid, settings }) {
       )}
       {isMine && lowestBidder && (
         <div className="px-4 pb-4 text-xs" style={{ color: COLORS.sage }}>
-          Leading bid: {fmtMoney(lowestBidder.amount)} by {lowestBidder.provider} · commission at close: {fmtMoney(lowestBidder.amount * settings.commissionPct / 100)}
+          Leading bid: {fmtMoney(lowestBidder.amount)} by {lowestBidder.provider}
         </div>
       )}
     </div>
   );
 }
-function ClosedCard({ job, settings }) {
+function ClosedCard({ job, settings, profile }) {
   const won = job.status === "closed";
+  const isWinner = won && profile && job.winner.bidderId === profile.id;
   return (
     <div className="rounded-xl p-4 border" style={{ borderColor: COLORS.mint, background: won ? COLORS.mint : "#f2f2f0" }}>
       <div className="flex items-center justify-between">
@@ -522,9 +531,11 @@ function ClosedCard({ job, settings }) {
       {won && (
         <div className="mt-2 text-sm" style={{ color: COLORS.ink }}>
           <p>Final price: <span className="mono font-bold">{fmtMoney(job.winner.amount)}</span></p>
-          <p className="text-xs mt-1" style={{ color: COLORS.sage }}>
-            Platform commission ({settings.commissionPct}%): {fmtMoney(job.winner.amount * settings.commissionPct / 100)} · Provider payout: {fmtMoney(job.winner.amount * (1 - settings.commissionPct / 100))}
-          </p>
+          {isWinner && (
+            <p className="text-xs mt-1" style={{ color: COLORS.sage }}>
+              You'll receive: {fmtMoney(job.winner.amount * (1 - settings.commissionPct / 100))}
+            </p>
+          )}
           <div className="mt-2 pt-2 border-t flex flex-wrap gap-4" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
             <div><span className="text-xs block" style={{ color: COLORS.sage }}>Customer contact</span><span className="text-sm font-medium">{job.posterName} · {job.posterContact}</span></div>
             <div><span className="text-xs block" style={{ color: COLORS.sage }}>Mower contact</span><span className="text-sm font-medium">{job.winner.provider} · {job.winner.contact}</span></div>
